@@ -1,0 +1,24 @@
+{
+  "name": "auto-sales-chatbot",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node src/index.js"
+  },
+  "dependencies": {
+    "axios": "^1.15.0",
+    "better-sqlite3": "^12.9.0",
+    "cars": "^1.1.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^4.19.2",
+    "multer": "^2.1.1",
+    "openai": "^6.33.0"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "tailwindcss": "^4.2.2"
+  }
+}
