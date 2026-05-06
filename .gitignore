@@ -1,3 +1,43 @@
+# Node
+node_modules/
+.pnpm-store/
+.npm/
+
+# Build outputs
+/dist/
+/build/
+/.next/
+/.vercel/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Env & secrets
+.env
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+
+# Local data
+uploads/
+*.sqlite
+*.db
+
+# Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Coverage
+coverage/
+
+# TypeScript
+*.tsbuildinfo
 # Logs
 logs
 *.log
