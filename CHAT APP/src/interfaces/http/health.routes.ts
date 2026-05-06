@@ -1,7 +1,7 @@
-import express from "express";
+import express, { Request, Response } from "express";
 const router = express.Router();
 
-router.get("/healthz", (_req, res) => {
+router.get("/healthz", (_req: Request, res: Response) => {
   res.json({ ok: true, ts: new Date().toISOString() });
 });
 

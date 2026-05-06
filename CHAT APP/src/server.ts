@@ -1,6 +1,6 @@
 import "./config/env.js"; // carga env y valida
 
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 
 import webhookHandler from "./webhook/webhookHandler.js";
@@ -34,7 +34,7 @@ export async function createServer() {
   app.use("/audio", audioRoutes);
 
   // Error handler
-  app.use((err, req, res, _next) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     console.error("🔥 Error no manejado:", err);
     res.status(500).json({ error: err?.message || "Error interno" });
   });
@@ -44,7 +44,7 @@ export async function createServer() {
     await initDb();
     console.log("🗄️  DB inicializada correctamente");
   } catch (err) {
-    console.warn("⚠️  No se pudo inicializar la DB:", err?.message || err);
+    console.warn("⚠️  No se pudo inicializar la DB:", (err as any)?.message || err);
   }
 
   return app;

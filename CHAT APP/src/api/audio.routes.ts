@@ -15,7 +15,7 @@ router.post(
   upload.single("audio"),
   async (req: Request, res: Response, _next: NextFunction) => {
     try {
-      const leadId = req.params.leadId;
+      const leadId = String(req.params.leadId);
       const file = req.file as Express.Multer.File | undefined;
       if (!file || !file.size || file.size <= 0) {
         return res.status(400).json({ error: "empty_audio_file" });
