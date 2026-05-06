@@ -9,7 +9,7 @@ router.post("/:leadId/text", async (req: Request, res: Response, next: NextFunct
     if (!dealerId) return res.status(400).json({ error: "Falta dealerId" });
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: "Falta text" });
-    await usecases.sendTextAndStore(dealerId, req.params.leadId, text);
+    await usecases.sendTextAndStore(dealerId, String(req.params.leadId), text);
     res.json({ ok: true });
   } catch (err) {
     next(err);

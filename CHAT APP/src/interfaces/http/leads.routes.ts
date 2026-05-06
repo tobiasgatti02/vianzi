@@ -30,9 +30,9 @@ router.get(
       if (!dealerId || !isUUID(dealerId)) {
         return res.status(400).json({ error: "dealerId inválido o ausente" });
       }
-      const lead = await usecases.getLeadById(dealerId, req.params.id);
+      const lead = await usecases.getLeadById(dealerId, String(req.params.id));
       if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
-      const messages = await usecases.getMessagesByLead(dealerId, req.params.id);
+      const messages = await usecases.getMessagesByLead(dealerId, String(req.params.id));
       res.json({ lead, messages });
     } catch (err) {
       next(err as any);
