@@ -1,0 +1,16 @@
+import "../styles/globals.css";
+import type { Metadata } from "next";
+import { ReactNode } from "react";
+
+export const metadata: Metadata = {
+  title: "Sales Dashboard",
+  description: "Dashboard de handoff para ventas",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
+  return (
+    <html lang="es">
+      <body>{children}</body>
+    </html>
+  );
+}

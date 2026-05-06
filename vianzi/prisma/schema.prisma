@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dealer {
+  id                    String   @id @default(uuid()) @db.Uuid
+  slug                  String   @unique
+  name                  String
+  whatsappPhoneNumberId String   @map("whatsapp_phone_number_id")
+  whatsappToken         String   @map("whatsapp_token")
+  webhookVerifyToken    String   @map("webhook_verify_token")
+  openaiApiKey          String?  @map("openai_api_key")
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  users   User[]
+  leads   Lead[]
+
+  @@map("dealers")
+}
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  dealerId     String   @db.Uuid @map("dealer_id")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   @default("admin")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  dealer Dealer @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+
+  @@map("users")
+}
+
+model Lead {
+  dealerId      String    @db.Uuid @map("dealer_id")
+  id            String
+  customerName  String?   @map("customer_name")
+  phone         String?
+  status        String?
+  intent        String?
+  modelBrand    String?   @map("model_brand")
+  modelName     String?   @map("model_name")
+  purchaseType  String?   @map("purchase_type")
+  useCase       String?   @map("use_case")
+  versionTier   String?   @map("version_tier")
+  timing        String?
+  handoffAt     DateTime? @map("handoff_at")
+  lastMessageAt DateTime? @map("last_message_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  dealer   Dealer   @relation(fields: [dealerId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@id([dealerId, id])
+  @@index([dealerId, status], name: "idx_leads_dealer_status")
+  @@index([dealerId, lastMessageAt], name: "idx_leads_dealer_lastmsg")
+  @@map("leads")
+}
+
+model Message {
+  id         BigInt   @id @default(autoincrement())
+  dealerId   String   @db.Uuid @map("dealer_id")
+  leadId     String   @map("lead_id")
+  sender     String
+  type       String
+  content    String?
+  mediaUrl   String?  @map("media_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  messageId  String?  @map("message_id")
+
+  lead Lead @relation(fields: [dealerId, leadId], references: [dealerId, id], onDelete: Cascade)
+
+  @@unique([dealerId, messageId])
+  @@index([dealerId, leadId, createdAt], name: "idx_messages_dealer_lead_created")
+  @@map("messages")
+}

@@ -1,0 +1,46 @@
+{
+  "name": "@naboletis/api",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "build:full": "tsc -p tsconfig.json && prisma generate",
+    "start": "node dist/index.js",
+    "vercel-build": "tsc -p tsconfig.json && prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init_neon_schema",
+    "prisma:deploy": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.15.1",
+    "axios": "^1.15.0",
+    "bcrypt": "^6.0.0",
+    "better-sqlite3": "^12.9.0",
+    "cars": "^1.1.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^4.19.2",
+    "form-data": "^4.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "multer": "^2.1.1",
+    "openai": "^6.33.0",
+    "pg": "^8.20.0",
+    "serverless-http": "^3.2.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/form-data": "^2.5.0",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^20.12.12",
+    "@types/pg": "^8.20.0",
+    "autoprefixer": "^10.4.27",
+    "postcss": "^8.5.9",
+    "prisma": "^5.15.1",
+    "tailwindcss": "^4.2.2",
+    "tsx": "^4.10.5",
+    "typescript": "^5.4.5"
+  }
+}
