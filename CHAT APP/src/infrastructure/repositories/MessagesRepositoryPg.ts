@@ -43,7 +43,7 @@ export class MessagesRepositoryPg implements MessagesRepository {
   }
 
   async getByLead(dealerId: UUID, leadId: string): Promise<Message[]> {
-    const r = await query<Message>(
+    const r = await query(
       `
       SELECT sender, type, content, media_url, created_at, message_id
       FROM messages

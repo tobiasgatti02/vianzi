@@ -4,7 +4,7 @@ import { query } from "../db/pgClient.js";
 
 export class LeadsRepositoryPg implements LeadsRepository {
   async getHandoffLeads(dealerId: UUID): Promise<Lead[]> {
-    const r = await query<Lead>(
+    const r = await query(
       `
       SELECT *
       FROM leads
@@ -17,7 +17,7 @@ export class LeadsRepositoryPg implements LeadsRepository {
   }
 
   async getById(dealerId: UUID, id: string): Promise<Lead | null> {
-    const r = await query<Lead>(
+    const r = await query(
       `SELECT * FROM leads WHERE dealer_id = $1 AND id = $2`,
       [dealerId, id]
     );

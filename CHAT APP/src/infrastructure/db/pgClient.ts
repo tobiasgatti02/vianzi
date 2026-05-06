@@ -16,7 +16,7 @@ export const pool = new Pool({
   ssl: needsSSL ? { rejectUnauthorized: false } : undefined,
 });
 
-export async function query<T = any>(sql: string, params: any[] = []) {
-  const r = await pool.query<T>(sql, params);
-  return r;
+export async function query(sql: string, params: any[] = []): Promise<any> {
+  const r = await pool.query(sql, params);
+  return r as any;
 }
