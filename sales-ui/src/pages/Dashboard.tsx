@@ -185,11 +185,11 @@ export default function Dashboard() {
 		const rec = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
 		recorderRef.current = rec;
 
-		rec.ondataavailable = (e) => {
-			if ((e as any).data && (e as any).data.size > 0) chunksRef.current.push((e as any).data);
-		} as any;
+		rec.ondataavailable = (e: any) => {
+			if (e?.data && e.data.size > 0) chunksRef.current.push(e.data);
+		};
 
-		rec.onstop = async () => {
+		rec.onstop = async (_ev: any) => {
 			streamRef.current?.getTracks()?.forEach((t) => t.stop());
 			const blob = new Blob(chunksRef.current, { type: rec.mimeType || "audio/webm" });
 			if (!blob.size || blob.size <= 0) {
@@ -208,7 +208,7 @@ export default function Dashboard() {
 				setSendingAudio(false);
 				setAutoScroll(true);
 			}
-		} as any;
+		};
 
 		rec.start();
 		setRecording(true);
