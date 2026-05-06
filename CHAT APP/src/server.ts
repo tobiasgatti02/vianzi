@@ -18,7 +18,7 @@ export async function createServer() {
     cors({
       origin: process.env.CORS_ORIGIN || "http://localhost:5173",
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: ["Content-Type", "Authorization"],
+      allowedHeaders: ["Content-Type", "Authorization", "x-dealer-id"],
     })
   );
 
