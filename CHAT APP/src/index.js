@@ -33,7 +33,13 @@ app.use("/messages", messagesRoutes);
 app.use("/audio", audioRoutes);
 
 // ✅ DB INIT (después de cargar env)
-await initDb();
+try {
+  await initDb();
+  console.log("🗄️  DB inicializada correctamente");
+} catch (err) {
+  console.warn("⚠️  No se pudo inicializar la DB:", err?.message || err);
+  console.warn("   Continuando sin DB (algunas rutas pueden fallar)...");
+}
 app.use((err, req, res, next) => {
   console.error("🔥 Error no manejado:", err);
   res.status(500).json({ error: err.message || "Error interno" });

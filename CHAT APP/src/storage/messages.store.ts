@@ -1,13 +1,19 @@
 import { query } from "../db/db.js";
 
-/**
- * addMessage(dealerId, leadId, message)
- * - Asegura que exista el lead (para no romper FK).
- * - Inserta el mensaje con dedupe por (dealer_id, message_id).
- * - Actualiza last_message_at del lead.
- */
-export async function addMessage(dealerId, leadId, message) {
-  // 1) Asegurar lead mínimo (para FK dealer_id + lead_id)
+type Message = {
+  sender: string;
+  type: string;
+  content?: string | null;
+  media_url?: string | null;
+  created_at?: Date | string;
+  message_id?: string | null;
+};
+
+export async function addMessage(
+  dealerId: string,
+  leadId: string,
+  message: Message
+): Promise<void> {
   await query(
     `
     INSERT INTO leads (dealer_id, id, phone, status, last_message_at)
@@ -18,8 +24,6 @@ export async function addMessage(dealerId, leadId, message) {
     [dealerId, leadId]
   );
 
-  // 2) Insertar mensaje (dedupe por dealer_id + message_id)
-  // Nota: en tu schema ya definimos UNIQUE (dealer_id, message_id)
   await query(
     `
     INSERT INTO messages (dealer_id, lead_id, sender, type, content, media_url, created_at, message_id)
@@ -34,11 +38,10 @@ export async function addMessage(dealerId, leadId, message) {
       message.content ?? null,
       message.media_url ?? null,
       message.created_at ? new Date(message.created_at) : new Date(),
-      message.message_id ?? null
+      message.message_id ?? null,
     ]
   );
 
-  // 3) Mantener actualizado last_message_at del lead
   await query(
     `
     UPDATE leads
@@ -49,11 +52,7 @@ export async function addMessage(dealerId, leadId, message) {
   );
 }
 
-/**
- * getMessagesByLead(dealerId, leadId)
- * - Devuelve mensajes ordenados por fecha (ASC), aislados por dealer.
- */
-export async function getMessagesByLead(dealerId, leadId) {
+export async function getMessagesByLead(dealerId: string, leadId: string) {
   const r = await query(
     `
     SELECT sender, type, content, media_url, created_at, message_id
@@ -63,6 +62,5 @@ export async function getMessagesByLead(dealerId, leadId) {
     `,
     [dealerId, leadId]
   );
-
   return r.rows;
 }

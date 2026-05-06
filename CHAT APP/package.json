@@ -1,10 +1,16 @@
 {
   "name": "auto-sales-chatbot",
   "version": "1.0.0",
-  "main": "src/index.js",
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "node src/index.js"
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.json && prisma generate",
+    "start": "node dist/index.js",
+    "vercel-build": "tsc -p tsconfig.json && prisma generate",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev --name init_neon_schema",
+    "prisma:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "axios": "^1.15.0",
@@ -17,9 +23,17 @@
     "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
     "openai": "^6.33.0",
-    "pg": "^8.20.0"
+    "pg": "^8.20.0",
+    "form-data": "^4.0.0",
+    "@prisma/client": "^5.15.1",
+    "serverless-http": "^3.2.0"
   },
   "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/form-data": "^2.5.0",
+    "prisma": "^5.15.1",
+    "tsx": "^4.10.5",
+    "typescript": "^5.4.5",
     "autoprefixer": "^10.4.27",
     "postcss": "^8.5.9",
     "tailwindcss": "^4.2.2"

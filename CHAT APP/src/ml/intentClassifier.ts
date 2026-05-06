@@ -1,7 +1,6 @@
-export function classifyIntent(textRaw) {
-  const text = textRaw.toLowerCase();
+export function classifyIntent(textRaw: string) {
+  const text = (textRaw || "").toLowerCase();
 
-  // 🔥 Compra inmediata
   if (
     text.includes("cerrar hoy") ||
     text.includes("tengo efectivo") ||
@@ -11,7 +10,6 @@ export function classifyIntent(textRaw) {
     return "BUY_NOW";
   }
 
-  // 💳 Interés en financiación
   if (
     text.includes("cuota") ||
     text.includes("financiar") ||
@@ -21,7 +19,6 @@ export function classifyIntent(textRaw) {
     return "FINANCE_INTENT";
   }
 
-  // 💵 Contado
   if (
     text.includes("contado") ||
     text.includes("efectivo") ||
@@ -30,7 +27,6 @@ export function classifyIntent(textRaw) {
     return "CASH_INTENT";
   }
 
-  // 💸 Objeción de precio
   if (
     text.includes("caro") ||
     text.includes("no llego") ||
@@ -40,7 +36,6 @@ export function classifyIntent(textRaw) {
     return "PRICE_OBJECTION";
   }
 
-  // ❄️ Riesgo de abandono
   if (
     text.includes("después vemos") ||
     text.includes("lo pienso") ||
@@ -49,6 +44,5 @@ export function classifyIntent(textRaw) {
     return "ABANDON_RISK";
   }
 
-  // 🟡 Explorando
   return "EXPLORING";
 }

@@ -36,27 +36,43 @@ router.get("/:id/messages", async (req, res, next) => {
  * Si todavía no tenés "getAllLeads", devolvemos handoff como fallback.
  * (Si querés TODOS los leads, decime cómo los guardás y lo ajusto.)
  */
-router.get("/", (req, res) => {
-  // Fallback: si tu app considera "handoff" como los leads a mostrar
-  const leads = getHandoffLeads();
-  res.json(leads);
+router.get("/", async (req, res, next) => {
+  try {
+    // Fallback: si tu app considera "handoff" como los leads a mostrar
+    const dealerId = req.dealerId || req.headers["x-dealer-id"] || req.query.dealerId;
+    const leads = await getHandoffLeads(dealerId);
+    res.json(leads);
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
  * ✅ GET /leads/handoff
  */
-router.get("/handoff", (req, res) => {
-  res.json(getHandoffLeads());
+router.get("/handoff", async (req, res, next) => {
+  try {
+    const dealerId = req.dealerId || req.headers["x-dealer-id"] || req.query.dealerId;
+    const leads = await getHandoffLeads(dealerId);
+    res.json(leads);
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
  * ✅ GET /leads/:id
  * Ya lo importabas pero no lo estabas usando.
  */
-router.get("/:id", (req, res) => {
-  const lead = getLeadById(req.params.id);
-  if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
-  res.json(lead);
+router.get(":id", async (req, res, next) => {
+  try {
+    const dealerId = req.dealerId || req.headers["x-dealer-id"] || req.query.dealerId;
+    const lead = await getLeadById(dealerId, req.params.id);
+    if (!lead) return res.status(404).json({ error: "Lead no encontrado" });
+    res.json(lead);
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
@@ -80,9 +96,14 @@ router.get("/:id/messages", async (req, res, next) => {
 /**
  * ✅ POST /leads/:id/outcome
  */
-router.post("/:id/outcome", (req, res) => {
-  updateLead(req.params.id, { outcome: req.body, status: "closed" });
-  res.json({ ok: true });
+router.post(":id/outcome", async (req, res, next) => {
+  try {
+    const dealerId = req.dealerId || req.headers["x-dealer-id"] || req.query.dealerId;
+    await updateLead(dealerId, req.params.id, { outcome: req.body, status: "closed" });
+    res.json({ ok: true });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;
