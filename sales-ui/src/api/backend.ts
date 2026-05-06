@@ -13,7 +13,7 @@ API.interceptors.request.use((cfg) => {
   return cfg;
 });
 
-export const getHandoffLeads = () => API.get("/leads/handoff");
+export const getHandoffLeads = () => API.get("/leads");
 export const getLeadDetail = (id: string) => API.get(`/leads/${id}`);
 export const sendTextMessage = (leadId: string, text: string) =>
   API.post(`/messages/${leadId}/text`, { text });
