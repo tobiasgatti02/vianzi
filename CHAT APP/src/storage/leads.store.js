@@ -1,77 +1,103 @@
-import { db } from "../db/db.js";
+import { query } from "../db/db.js";
 
-export function upsertLead(lead) {
-  const stmt = db.prepare(`
+// Upsert lead (multi-tenant)
+export async function upsertLead(dealerId, lead) {
+  const modelBrand = lead.model_interest?.brand ?? lead.model_brand ?? null;
+  const modelName = lead.model_interest?.model ?? lead.model_name ?? null;
+
+  await query(
+    `
     INSERT INTO leads (
-      id, customer_name, phone, status, intent,
+      dealer_id, id, customer_name, phone, status, intent,
       model_brand, model_name, purchase_type,
+      use_case, version_tier, timing,
       handoff_at, last_message_at,
       outcome_status, notes, next_contact_at, last_human_action_at
     )
     VALUES (
-      @id, @customer_name, @phone, @status, @intent,
-      @model_brand, @model_name, @purchase_type,
-      @handoff_at, @last_message_at,
-      @outcome_status, @notes, @next_contact_at, @last_human_action_at
+      $1,$2,$3,$4,$5,$6,
+      $7,$8,$9,
+      $10,$11,$12,
+      $13,$14,
+      $15,$16,$17,$18
     )
-    ON CONFLICT(id) DO UPDATE SET
-      customer_name=excluded.customer_name,
-      phone=excluded.phone,
-      status=excluded.status,
-      intent=excluded.intent,
-      model_brand=excluded.model_brand,
-      model_name=excluded.model_name,
-      purchase_type=excluded.purchase_type,
-      handoff_at=excluded.handoff_at,
-      last_message_at=excluded.last_message_at,
-      outcome_status=excluded.outcome_status,
-      notes=excluded.notes,
-      next_contact_at=excluded.next_contact_at,
-      last_human_action_at=excluded.last_human_action_at
-  `);
+    ON CONFLICT (dealer_id, id) DO UPDATE SET
+      customer_name = EXCLUDED.customer_name,
+      phone = EXCLUDED.phone,
+      status = EXCLUDED.status,
+      intent = EXCLUDED.intent,
+      model_brand = EXCLUDED.model_brand,
+      model_name = EXCLUDED.model_name,
+      purchase_type = EXCLUDED.purchase_type,
+      use_case = EXCLUDED.use_case,
+      version_tier = EXCLUDED.version_tier,
+      timing = EXCLUDED.timing,
+      handoff_at = EXCLUDED.handoff_at,
+      last_message_at = EXCLUDED.last_message_at,
+      outcome_status = EXCLUDED.outcome_status,
+      notes = EXCLUDED.notes,
+      next_contact_at = EXCLUDED.next_contact_at,
+      last_human_action_at = EXCLUDED.last_human_action_at
+    `,
+    [
+      dealerId,
+      lead.id,
+      lead.customer_name ?? null,
+      lead.phone ?? lead.id,
+      lead.status ?? null,
+      lead.intent ?? null,
 
-  stmt.run({
-    id: lead.id,
-    customer_name: lead.customer_name ?? null,
-    phone: lead.phone ?? lead.id,
-    status: lead.status ?? null,
-    intent: lead.intent ?? null,
+      modelBrand,
+      modelName,
+      lead.purchase_type ?? null,
 
-    model_brand: lead.model_interest?.brand ?? lead.model_brand ?? null,
-    model_name: lead.model_interest?.model ?? lead.model_name ?? null,
+      lead.use_case ?? null,
+      lead.version_tier ?? null,
+      lead.timing ?? null,
 
-    purchase_type: lead.purchase_type ?? null,
-    handoff_at: lead.handoff_at ? new Date(lead.handoff_at).toISOString() : null,
-    last_message_at: lead.last_message_at ? new Date(lead.last_message_at).toISOString() : new Date().toISOString(),
+      lead.handoff_at ? new Date(lead.handoff_at) : null,
+      lead.last_message_at ? new Date(lead.last_message_at) : new Date(),
 
-    outcome_status: lead.outcome_status ?? null,
-    notes: lead.notes ?? null,
-    next_contact_at: lead.next_contact_at ? new Date(lead.next_contact_at).toISOString() : null,
-    last_human_action_at: lead.last_human_action_at ? new Date(lead.last_human_action_at).toISOString() : null,
-  });
+      lead.outcome_status ?? null,
+      lead.notes ?? null,
+      lead.next_contact_at ? new Date(lead.next_contact_at) : null,
+      lead.last_human_action_at ? new Date(lead.last_human_action_at) : null
+    ]
+  );
 }
 
-export function getHandoffLeads() {
-  const rows = db.prepare(`
+// Leads en handoff (solo del dealer)
+export async function getHandoffLeads(dealerId) {
+  const r = await query(
+    `
     SELECT *
     FROM leads
-    WHERE status = 'handoff'
-    ORDER BY datetime(last_message_at) DESC
-  `).all();
+    WHERE dealer_id = $1 AND status = 'handoff'
+    ORDER BY last_message_at DESC NULLS LAST
+    `,
+    [dealerId]
+  );
 
-  return rows.map(mapLeadRow);
+  return r.rows.map(mapLeadRow);
 }
 
-export function getLeadById(id) {
-  const row = db.prepare(`SELECT * FROM leads WHERE id = ?`).get(id);
+// Detalle lead (solo del dealer)
+export async function getLeadById(dealerId, id) {
+  const r = await query(
+    `SELECT * FROM leads WHERE dealer_id = $1 AND id = $2`,
+    [dealerId, id]
+  );
+
+  const row = r.rows[0];
   return row ? mapLeadRow(row) : null;
 }
 
-export function updateLead(id, data) {
-  const current = getLeadById(id);
+// Update parcial (solo del dealer)
+export async function updateLead(dealerId, id, data) {
+  const current = await getLeadById(dealerId, id);
   if (!current) return;
 
-  upsertLead({
+  await upsertLead(dealerId, {
     ...current,
     ...data,
     id
@@ -85,8 +111,16 @@ function mapLeadRow(row) {
     phone: row.phone,
     status: row.status,
     intent: row.intent,
-    model_interest: row.model_name ? { brand: row.model_brand, model: row.model_name } : null,
+
+    model_interest: row.model_name
+      ? { brand: row.model_brand, model: row.model_name }
+      : null,
+
     purchase_type: row.purchase_type,
+    use_case: row.use_case,
+    version_tier: row.version_tier,
+    timing: row.timing,
+
     handoff_at: row.handoff_at,
     last_message_at: row.last_message_at,
 

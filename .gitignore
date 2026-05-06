@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.vite/
+.env
+.env.*
+!.env.example
+data/
+*.db
+uploads/
+*.log
+.vscode/
+.idea/

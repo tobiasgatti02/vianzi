@@ -1,8 +1,10 @@
 import axios from "axios";
 
-export async function sendInteractive(to, interactive) {
+export async function sendInteractive(creds, to, interactive) {
+  const { token, phoneNumberId } = creds;
+
   await axios.post(
-    `https://graph.facebook.com/v18.0/${process.env.WHATSAPP_PHONE_ID}/messages`,
+    `https://graph.facebook.com/v18.0/${phoneNumberId}/messages`,
     {
       messaging_product: "whatsapp",
       recipient_type: "individual",
@@ -12,7 +14,7 @@ export async function sendInteractive(to, interactive) {
     },
     {
       headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json"
       }
     }

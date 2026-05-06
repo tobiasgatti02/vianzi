@@ -89,19 +89,65 @@ export function processMessage(session, textRaw, meta = {}) {
   // ========= State machine =========
   switch (updated.stage) {
     case "START": {
-      updated.stage = advance();
-      return { intent: updated.stage, data: {}, session: updated, rawText: textRaw };
-    }
+  // Siempre pedimos nombre (confirmamos si WhatsApp lo trae)
+  if (meta?.name && !updated.customerNameConfirmed) {
+    updated.customerNameCandidate = meta.name;
+    updated.stage = "ASK_NAME_CONFIRM";
+    return { intent: "ASK_NAME_CONFIRM", data: {}, session: updated, rawText: textRaw };
+  }
 
-    case "ASK_NAME": {
-      const cand = text.trim();
-      if (cand.length >= 2) {
-        updated.customerName = cand;
-        updated.stage = advance();
-        return { intent: updated.stage, data: {}, session: updated, rawText: textRaw };
-      }
-      return { intent: "ASK_NAME", data: {}, session: updated, rawText: textRaw };
-    }
+  if (!updated.customerName || !updated.customerNameConfirmed) {
+    updated.stage = "ASK_NAME";
+    return { intent: "ASK_NAME", data: {}, session: updated, rawText: textRaw };
+  }
+
+  updated.stage = "WIZ_USE_CASE";
+  return { intent: "WIZ_USE_CASE", data: {}, session: updated, rawText: textRaw };
+}
+
+    case "ASK_NAME_CONFIRM": {
+  const cid = meta.choiceId;
+
+  if (cid === "NAME_YES") {
+    updated.customerName = updated.customerNameCandidate || updated.customerName || null;
+    updated.customerNameConfirmed = true;
+    updated.stage = "WIZ_USE_CASE";
+    return { intent: "WIZ_USE_CASE", data: {}, session: updated, rawText: textRaw };
+  }
+
+  if (cid === "NAME_NO") {
+    updated.customerNameCandidate = null;
+    updated.customerName = null;
+    updated.customerNameConfirmed = false;
+    updated.stage = "ASK_NAME";
+    return { intent: "ASK_NAME", data: {}, session: updated, rawText: textRaw };
+  }
+
+  if (cid === "NAME_SKIP") {
+    updated.customerName = null;
+    updated.customerNameConfirmed = true; // permitimos seguir sin nombre
+    updated.stage = "WIZ_USE_CASE";
+    return { intent: "WIZ_USE_CASE", data: {}, session: updated, rawText: textRaw };
+  }
+
+  // Si no eligió nada todavía, seguimos esperando confirmación
+  return { intent: "ASK_NAME_CONFIRM", data: {}, session: updated, rawText: textRaw };
+}
+
+case "ASK_NAME": {
+  const nameCandidate = (textRaw || "").trim();
+
+  // validación mínima: evita que "ok" pase como nombre
+  if (nameCandidate.length >= 2 && !/^(ok|oka|dale|si|sí)$/i.test(nameCandidate)) {
+    updated.customerName = nameCandidate;
+    updated.customerNameConfirmed = true;
+    updated.stage = "WIZ_USE_CASE";
+    return { intent: "WIZ_USE_CASE", data: {}, session: updated, rawText: textRaw };
+  }
+
+  return { intent: "ASK_NAME", data: {}, session: updated, rawText: textRaw };
+}
+``
 
     // PASO 1: USO
     case "WIZ_USE_CASE": {

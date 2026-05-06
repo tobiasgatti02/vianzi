@@ -1,52 +1,68 @@
-import { db } from "../db/db.js";
+import { query } from "../db/db.js";
 
-export function addMessage(leadId, message) {
-  // 1) Asegurar que el lead exista (mínimo) para no romper FK
-  db.prepare(`
-    INSERT OR IGNORE INTO leads (
-      id, phone, status, last_message_at
-    ) VALUES (?, ?, 'handoff', ?)
-  `).run(
-    leadId,
-    leadId,
-    new Date().toISOString()
+/**
+ * addMessage(dealerId, leadId, message)
+ * - Asegura que exista el lead (para no romper FK).
+ * - Inserta el mensaje con dedupe por (dealer_id, message_id).
+ * - Actualiza last_message_at del lead.
+ */
+export async function addMessage(dealerId, leadId, message) {
+  // 1) Asegurar lead mínimo (para FK dealer_id + lead_id)
+  await query(
+    `
+    INSERT INTO leads (dealer_id, id, phone, status, last_message_at)
+    VALUES ($1, $2, $2, 'handoff', NOW())
+    ON CONFLICT (dealer_id, id)
+    DO UPDATE SET last_message_at = NOW()
+    `,
+    [dealerId, leadId]
   );
 
-  // 2) Insertar mensaje (dedupe por message_id si existe)
-  const stmt = db.prepare(`
-    INSERT OR IGNORE INTO messages (
-      lead_id, sender, type, content, media_url, created_at, message_id
-    )
-    VALUES (
-      @lead_id, @sender, @type, @content, @media_url, @created_at, @message_id
-    )
-  `);
+  // 2) Insertar mensaje (dedupe por dealer_id + message_id)
+  // Nota: en tu schema ya definimos UNIQUE (dealer_id, message_id)
+  await query(
+    `
+    INSERT INTO messages (dealer_id, lead_id, sender, type, content, media_url, created_at, message_id)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    ON CONFLICT (dealer_id, message_id) DO NOTHING
+    `,
+    [
+      dealerId,
+      leadId,
+      message.sender,
+      message.type,
+      message.content ?? null,
+      message.media_url ?? null,
+      message.created_at ? new Date(message.created_at) : new Date(),
+      message.message_id ?? null
+    ]
+  );
 
-  stmt.run({
-    lead_id: leadId,
-    sender: message.sender,
-    type: message.type,
-    content: message.content ?? null,
-    media_url: message.media_url ?? null,
-    created_at: message.created_at
-      ? new Date(message.created_at).toISOString()
-      : new Date().toISOString(),
-    message_id: message.message_id ?? null
-  });
-
-  // 3) Mantener actualizado el "last_message_at"
-  db.prepare(`
+  // 3) Mantener actualizado last_message_at del lead
+  await query(
+    `
     UPDATE leads
-    SET last_message_at = ?
-    WHERE id = ?
-  `).run(new Date().toISOString(), leadId);
+    SET last_message_at = NOW()
+    WHERE dealer_id = $1 AND id = $2
+    `,
+    [dealerId, leadId]
+  );
 }
 
-export function getMessagesByLead(leadId) {
-  return db.prepare(`
+/**
+ * getMessagesByLead(dealerId, leadId)
+ * - Devuelve mensajes ordenados por fecha (ASC), aislados por dealer.
+ */
+export async function getMessagesByLead(dealerId, leadId) {
+  const r = await query(
+    `
     SELECT sender, type, content, media_url, created_at, message_id
     FROM messages
-    WHERE lead_id = ?
-    ORDER BY datetime(created_at) ASC
-  `).all(leadId);
+    WHERE dealer_id = $1 AND lead_id = $2
+    ORDER BY created_at ASC
+    `,
+    [dealerId, leadId]
+  );
+
+  return r.rows;
 }

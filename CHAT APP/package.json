@@ -8,13 +8,16 @@
   },
   "dependencies": {
     "axios": "^1.15.0",
+    "bcrypt": "^6.0.0",
     "better-sqlite3": "^12.9.0",
     "cars": "^1.1.6",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.3",
     "multer": "^2.1.1",
-    "openai": "^6.33.0"
+    "openai": "^6.33.0",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.27",

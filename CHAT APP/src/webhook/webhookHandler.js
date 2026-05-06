@@ -3,6 +3,8 @@ import { sendInteractive } from "../whatsapp/sendInteractive.js";
 import { buildInteractive } from "../whatsapp/buildInteractive.js";
 import { generateAIResponse } from "../ai/generateAIResponse.js";
 
+import { getDealerBySlug } from "../storage/dealers.store.js";
+
 import { upsertLead } from "../storage/leads.store.js";
 import { addMessage } from "../storage/messages.store.js";
 
@@ -11,10 +13,11 @@ import { detectModelsFromText } from "../catalog/detectModel.js";
 import { classifyIntent } from "../ml/intentClassifier.js";
 import { processMessage } from "../engine/conversationEngine.js";
 
-// ✅ Deduplicación de inbound por wamid (evita duplicados)
+/**
+ * ✅ Deduplicación de inbound por wamid (evita duplicados por retries del webhook)
+ */
 const processedInbound = new Map(); // messageId -> timestamp
 const DEDUPE_TTL_MS = 10 * 60 * 1000;
-
 function isDuplicateInbound(messageId) {
   const now = Date.now();
   for (const [id, ts] of processedInbound.entries()) {
@@ -25,13 +28,17 @@ function isDuplicateInbound(messageId) {
   return false;
 }
 
-// ✅ Fallback si OpenAI no está
-function fallbackReply(intent, session) {
+/**
+ * ✅ Fallback si OpenAI no está (o falla). No divaga, es corto y funcional.
+ */
+function fallbackReply(intent) {
   switch (intent) {
     case "ASK_NAME":
-      return "Hola 👋 Antes de ayudarte, ¿podrías decirme tu nombre?";
+      return "Hola 👋 Antes de ayudarte, ¿cómo te llamás?";
+    case "ASK_NAME_CONFIRM":
+      return "Hola 👋 ¿Te llamás así?";
     case "WIZ_USE_CASE":
-      return "¿Para qué lo vas a usar? (por ejemplo Uber/Apps, familiar, primer auto, carga)";
+      return "¿Para qué lo vas a usar? (Uber/Apps, familiar, primer auto, carga)";
     case "WIZ_MODEL":
       return "¿Qué modelo te interesa? (Cronos, Pulse, Strada, Toro)";
     case "WIZ_VERSION":
@@ -45,11 +52,71 @@ function fallbackReply(intent, session) {
   }
 }
 
+/**
+ * ✅ Compatibilidad: algunos módulos tuyos pueden estar con firma vieja o nueva.
+ * - sendText(creds,to,msg) o sendText(to,msg)
+ * - sendInteractive(creds,to,obj) o sendInteractive(to,obj)
+ * - upsertLead(dealerId,lead) o upsertLead(lead)
+ * - addMessage(dealerId,leadId,msg) o addMessage(leadId,msg)
+ */
+async function safeSendText(creds, to, msg) {
+  try {
+    if (sendText.length >= 3) return await sendText(creds, to, msg);
+    return await sendText(to, msg);
+  } catch (e) {
+    throw e;
+  }
+}
+
+async function safeSendInteractive(creds, to, interactive) {
+  try {
+    if (sendInteractive.length >= 3) return await sendInteractive(creds, to, interactive);
+    return await sendInteractive(to, interactive);
+  } catch (e) {
+    throw e;
+  }
+}
+
+async function safeUpsertLead(dealerId, lead) {
+  if (upsertLead.length >= 2) return await upsertLead(dealerId, lead);
+  return await upsertLead(lead);
+}
+
+async function safeAddMessage(dealerId, leadId, msg) {
+  if (addMessage.length >= 3) return await addMessage(dealerId, leadId, msg);
+  return await addMessage(leadId, msg);
+}
+
 export default async function webhookHandler(req, res) {
   try {
-    // ✅ Responder 200 siempre (webhook)
+    /**
+     * 1) Resolver dealer por slug (multi-concesionario)
+     */
+    
+
+    /**
+     * 2) Verificación GET del webhook (Meta)
+     *    IMPORTANTE: debe responder el challenge, NO sendStatus(200) fijo
+     */
+    if (req.method === "GET") {
+      const mode = req.query["hub.mode"];
+      const token = req.query["hub.verify_token"];
+      const challenge = req.query["hub.challenge"];
+
+      if (mode === "subscribe" && token === dealer.webhook_verify_token) {
+        return res.status(200).send(challenge);
+      }
+      return res.sendStatus(403);
+    }
+
+    /**
+     * 3) POST: responder 200 rápido para que Meta no reintente.
+     */
     res.sendStatus(200);
 
+    /**
+     * 4) Parse webhook payload
+     */
     const body = req.body;
     const entry = body?.entry?.[0];
     const change = entry?.changes?.[0];
@@ -68,7 +135,7 @@ export default async function webhookHandler(req, res) {
     const from = message.from;
     const name = value?.contacts?.[0]?.profile?.name || null;
 
-    // ===== Texto + choiceId (para wizard) =====
+    // ===== Texto + choiceId (wizard) =====
     let text = "";
     let choiceId = null;
 
@@ -83,8 +150,22 @@ export default async function webhookHandler(req, res) {
 
     console.log("📨 Entrante:", from, text);
 
-    // ✅ Guardar inbound SIEMPRE (para dashboard)
-    addMessage(from, {
+    /**
+     * 5) Session aislada por concesionario (evita cruces)
+     */
+    const sessionKey = `${dealer.id}:${from}`;
+    const session = getSession(sessionKey);
+
+    // Guardar candidate name si viene del perfil
+    if (!session.customerName && name && !session.customerNameCandidate) {
+      session.customerNameCandidate = name;
+      updateSession(sessionKey, session);
+    }
+
+    /**
+     * 6) Guardar inbound SIEMPRE para dashboard (persistencia)
+     */
+    await safeAddMessage(dealer.id, from, {
       sender: "user",
       type: "text",
       content: message.type === "interactive" ? `[selección] ${text}` : text,
@@ -92,59 +173,106 @@ export default async function webhookHandler(req, res) {
       message_id: inboundId
     });
 
-    // ✅ Sesión SIEMPRE existente
-    const session = getSession(from);
-
-    // 🔇 Si está en modo humano, bot silenciado (pero ya guardamos inbound)
+    /**
+     * 7) Si está en modo humano/handoff, el bot NO responde, pero ya guardó el inbound
+     */
     if (session.mode === "human" || session.handoff === true) {
       console.log("🧑‍💼 Modo humano activo, bot silenciado para:", from);
       return;
     }
 
-    // ✅ Señales (ANTES de usar intentSignal)
+    /**
+     * 8) Señales para engine
+     */
     const detectedModels = detectModelsFromText(text) || [];
     const intentSignal = classifyIntent(text);
 
     const meta = { name, detectedModels, intentSignal, choiceId };
 
-    // ✅ Persistencia mínima del lead (evita FK issues y completa datos)
-    upsertLead({
+    /**
+     * 9) Engine decide
+     */
+    const result = processMessage(session, text, meta);
+
+    /**
+     * 10) Persistir sesión
+     */
+    updateSession(sessionKey, result.session);
+
+    /**
+     * 11) Persistencia mínima del lead (para que quede trazabilidad)
+     *     Guardamos use_case/version_tier/timing si el engine los trae
+     */
+    await safeUpsertLead(dealer.id, {
       id: from,
-      customer_name: session.customerName || name || null,
+      customer_name: result.session.customerName || session.customerName || name || null,
       phone: from,
-      status: "handoff", // podés diferenciar luego si querés
+      status: result.session.handoff ? "handoff" : "handoff",
       intent: intentSignal || null,
-      model_interest: session.selectedModel || null,
-      purchase_type: session.purchaseType || null,
-      handoff_at: new Date(),
+      model_interest: result.session.selectedModel || session.selectedModel || null,
+      purchase_type: result.session.purchaseType || session.purchaseType || null,
+      use_case: result.session.useCase || null,
+      version_tier: result.session.versionTier || null,
+      timing: result.session.timing || null,
+      handoff_at: result.session.handoff ? new Date() : null,
       last_message_at: new Date()
     });
 
-    // ✅ Engine decide
-    const result = processMessage(session, text, meta);
+    /**
+     * =======================
+     * ROUTER DE RESPUESTAS
+     * =======================
+     */
 
-    // ✅ Persistir sesión
-    updateSession(from, result.session);
+    // 1) Confirmación de nombre por botones
+    if (result.intent === "ASK_NAME_CONFIRM") {
+      const interactive = buildInteractive("ASK_NAME_CONFIRM", result.session);
+      await safeSendInteractive(creds, from, interactive);
 
-    // ✅ Si engine pide wizard → enviar interactive y cortar acá
-    const interactive = buildInteractive(result.intent);
-    if (interactive) {
-      await sendInteractive(from, interactive);
-
-      addMessage(from, {
+      await safeAddMessage(dealer.id, from, {
         sender: "bot",
         type: "text",
-        content: "[interactive]",
+        content: "[interactive:name_confirm]",
         created_at: new Date()
       });
 
       return;
     }
 
-    // ✅ HANDOFF: mensaje de cierre corto
+    // 2) Pedir nombre por texto (sin IA)
+    if (result.intent === "ASK_NAME") {
+      const msg = "Hola 👋 Antes de ayudarte, ¿cómo te llamás?";
+      await safeSendText(creds, from, msg);
+
+      await safeAddMessage(dealer.id, from, {
+        sender: "bot",
+        type: "text",
+        content: msg,
+        created_at: new Date()
+      });
+
+      return;
+    }
+
+    // 3) Wizard: si el intent tiene menú, mandar interactive y cortar
+    const wizardInteractive = buildInteractive(result.intent, result.session);
+    if (wizardInteractive) {
+      await safeSendInteractive(creds, from, wizardInteractive);
+
+      await safeAddMessage(dealer.id, from, {
+        sender: "bot",
+        type: "text",
+        content: `[interactive:${result.intent}]`,
+        created_at: new Date()
+      });
+
+      return;
+    }
+
+    // 4) HANDOFF: mensaje corto, una sola vez
     if (result.intent === "HANDOFF" || result.session.handoff === true) {
       if (result.session.handoffNotified) {
-        updateSession(from, { ...result.session, mode: "human", handoff: true });
+        updateSession(sessionKey, { ...result.session, mode: "human", handoff: true });
         return;
       }
 
@@ -154,9 +282,9 @@ export default async function webhookHandler(req, res) {
         handoffNotified: true,
         mode: "human"
       };
-      updateSession(from, updated);
+      updateSession(sessionKey, updated);
 
-      upsertLead({
+      await safeUpsertLead(dealer.id, {
         id: from,
         customer_name: updated.customerName || name || "Cliente",
         phone: from,
@@ -164,6 +292,9 @@ export default async function webhookHandler(req, res) {
         intent: intentSignal || null,
         model_interest: updated.selectedModel || null,
         purchase_type: updated.purchaseType || null,
+        use_case: updated.useCase || null,
+        version_tier: updated.versionTier || null,
+        timing: updated.timing || null,
         handoff_at: new Date(),
         last_message_at: new Date()
       });
@@ -185,9 +316,9 @@ export default async function webhookHandler(req, res) {
         `Quedó registrado: ${modelo} · ${pago} · ${cuando}.\n` +
         `Te pasa un asesor para cerrar. ¿Preferís hoy o mañana?`;
 
-      await sendText(from, closeMsg);
+      await safeSendText(creds, from, closeMsg);
 
-      addMessage(from, {
+      await safeAddMessage(dealer.id, from, {
         sender: "bot",
         type: "text",
         content: closeMsg,
@@ -197,11 +328,11 @@ export default async function webhookHandler(req, res) {
       return;
     }
 
-    // ✅ Si NO es handoff: IA si hay key, sino fallback
+    // 5) IA (solo si no es wizard ni handoff)
     let reply;
 
     if (!process.env.OPENAI_API_KEY) {
-      reply = fallbackReply(result.intent, result.session);
+      reply = fallbackReply(result.intent);
       console.warn("⚠️ OPENAI_API_KEY no está definida: usando fallback.");
     } else {
       try {
@@ -218,13 +349,13 @@ export default async function webhookHandler(req, res) {
         );
       } catch (e) {
         console.error("⚠️ OpenAI falló, usando fallback:", e?.message || e);
-        reply = fallbackReply(result.intent, result.session);
+        reply = fallbackReply(result.intent);
       }
     }
 
-    await sendText(from, reply);
+    await safeSendText(creds, from, reply);
 
-    addMessage(from, {
+    await safeAddMessage(dealer.id, from, {
       sender: "bot",
       type: "text",
       content: reply,
@@ -235,4 +366,3 @@ export default async function webhookHandler(req, res) {
     console.error("❌ Error en webhookHandler:", err?.response?.data || err);
   }
 }
-``
